@@ -1,0 +1,270 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use File::ExtAttr ();
+use Encode;
+use Getopt::Long;
+use JSON::XS;
+use Path::Tiny;
+use Pod::Usage;
+
+our $VERSION = 0.01_01;
+
+GetOptions(
+	"set-interactive"	=> \my $set_interactive,
+	"set-from-file:s"	=> \my $set_from_file,
+	"player:s"	=> \my $player,
+	"play-sole-one"	=> \my $play_sole_one,
+	"once"		=> \my $once,
+	"debug"		=> \my $debug,
+	'help|h'	=> \my $help,
+) or pod2usage(2);
+pod2usage(1) unless !$help;
+pod2usage({ -message => "\n Please supply a video-file!\n", exitval => 2 }) unless $ARGV[0];
+pod2usage({ -message => "\n --set-interactive and --set-from-file are mutually exclusive!\n", exitval => 2 }) if $set_interactive && $set_from_file;
+
+my $path = shift(@ARGV);
+error("File '$path' not found!") unless -f $path;
+
+require Data::Dumper if $debug;
+
+if($set_interactive || $set_from_file){
+	my @add;
+	if($set_from_file){
+		my $text = path($set_from_file)->slurp_raw;
+		@add = parse_text( \$text, $debug );
+	}else{
+		my $timecode = `zenity --entry --title='Video Bookmarks' --text="Please enter a timecode" --entry-text="00:00:00"`;
+		chomp($timecode);
+		print "timecode:$timecode \n" if $debug;
+
+		my $description;
+		while($description = `zenity --entry --title='Video Bookmarks' --text="Please enter a description"`){
+			last if $description ne "\n";
+		}
+		chomp($description);
+		$description = decode('utf-8', $description);
+		print "description:'$description' \n" if $debug;
+
+		@add = ([ $timecode, $description ]);
+	}
+
+	my $flag = getfattr($path, 'video.bookmarks');
+	if($flag && $flag =~ /^\[\[/){	# is JSON
+		my $ref = JSON::XS::decode_json($flag);
+		print 'existing:'. Data::Dumper::Dumper($ref) if $debug;
+		push(@$ref, @add);
+		my $json = JSON::XS::encode_json($ref);
+		print 'replace:'. Data::Dumper::Dumper($ref) ."\njson:".$json if $debug;
+		setfattr($path, 'video.bookmarks', $json);
+	}elsif($flag && $flag =~ /^\d/){ # is numeric
+		# todo: look for video.bookmark.N
+	}else{
+		my $ref = [];
+		push(@$ref, @add);
+		my $json = JSON::XS::encode_json($ref);
+		print 'create:'. Data::Dumper::Dumper($ref) ."\njson:".$json if $debug;
+		setfattr($path, 'video.bookmarks', $json);
+	}
+}else{
+	for(;;){
+		## from basename
+		my @basename_bmarks = parse_basename( path($path)->basename, $debug );
+
+		## from xattr
+		my $flag = getfattr($path, 'video.bookmarks');
+
+		my @xattr_bmarks;
+		if($flag && $flag =~ /^\[\[/){	# is JSON
+			my $ref = JSON::XS::decode_json($flag);
+			print Data::Dumper::Dumper($ref) if $debug;
+			@xattr_bmarks = @$ref;
+		}elsif($flag && $flag =~ /^\d/){ # is numeric
+			# todo: look for video.bookmark.N
+		}
+
+		my @list;
+		for(sort { $a->[0] cmp $b->[0] } @xattr_bmarks,@basename_bmarks){
+			print " ". $_->[0] ." ". $_->[1] ."\n" if $debug;
+			$_->[1] =~ s/"/\\"/g;
+			push(@list, $_->[0], '"'.($_->[1]||'-').'"');
+		}
+
+		my $selection;
+		if( (@xattr_bmarks + @basename_bmarks) == 1 && $play_sole_one){
+			$selection = $list[0];
+			undef($play_sole_one);
+		}elsif( (@xattr_bmarks + @basename_bmarks) == 0){
+			# play but exit
+			if($player && $player eq 'avplay'){
+				exec('avplay', $path);
+			}elsif($player && $player eq 'smplayer'){
+				exec('smplayer', $path);
+			}else{
+				exec('mplayer', $path);
+			}
+			exit;
+		}else{
+			my $height = 300;
+			$height += ( (scalar(@list) / 2) - 8) * 23 if @list > 8; # 23 px is one entry
+			$height = 1024 if $height > 1024; # browser stats as of 2015: most screens above 1024 px high
+			$selection = `zenity --list --window-icon='info' --title="Video Bookmarks" --width=350 --height=$height --print-column=1 --column='Time' --column='Description' @list`; 
+			($selection) = split(/\|/,$selection); # get rid of separator
+		}
+
+		## play
+		if($selection){
+			if($player && $player eq 'avplay'){
+				my @command = ('avplay', '-ss', $selection, $path);
+				print "@command\n" if $debug;
+				system(@command);
+			}elsif($player && $player eq 'smplayer'){
+			#	my @command = ('smplayer', $path);
+			#	exec(@command);
+			#	my @actions;
+			#	for(1..3){
+			#		push(@actions, 'forward2'); #  we can't pass timecode to 'jump_to' action
+			#	}
+			#	my @command = ('smplayer', "-send-action @actions");
+			#	exec(@command);
+			}else{
+				my @command = ('mplayer', '--ss='.$selection, $path);
+				print "@command\n" if $debug;
+				system(@command);
+			}
+		}else{
+			print "Canceled \n";
+			exit;
+		}
+
+		exit if $once;
+	}
+}
+
+sub parse_basename {
+	my ($basename,$debug) = @_;
+
+	my %bmarks = $basename =~ /\[([^\]]+)\]\(([^)]*)\)/g;
+	print "parse_basename: ". Data::Dumper::Dumper(\%bmarks) ." \n" if $debug;
+
+	my @bmarks;
+	for(keys %bmarks){ push(@bmarks, [ $_,  decode('utf-8',$bmarks{$_}) ]); }
+
+	return @bmarks;
+}
+
+sub parse_text {
+	my ($text_ref,$debug) = @_;
+
+	my %bmarks;
+	for( split(/\n/,$$text_ref) ){
+		chomp($_);
+		(my $timecode) = $_ =~ /(\d{1,2}:\d{1,2}:\d{1,2})/;	# find timecode
+		$_ =~ s/$timecode// if $timecode;			# if found, remove tc so everything else is description
+		my $description = $_;
+		$description =~ s/^\s+|\s+$//g;				# remove leading/trailing space
+
+		$bmarks{$timecode} = $description if $timecode && $description;
+	}
+	print "parse_text: ". Data::Dumper::Dumper(\%bmarks) ." \n" if $debug;
+
+	my @bmarks;
+	for(keys %bmarks){ push(@bmarks, [ $_,  decode('utf-8',$bmarks{$_}) ]); }
+
+	return @bmarks;
+}
+
+sub error {
+	my $message = shift;
+	`zenity --error --title='Video Bookmarks' --text="$message"`;
+	exit;
+}
+
+sub getfattr {
+	my ($path, $key) = @_;
+
+	File::ExtAttr::getfattr($path, $key, { namespace => 'user' });
+}
+
+sub setfattr {
+	my ($path, $key, $value) = @_;
+
+	File::ExtAttr::setfattr($path, $key, $value, { namespace => 'user' });
+}
+
+__END__
+
+=head1 NAME
+
+video-bookmarks - Wrapper script which passes seek offsets to video-players
+
+=head1 SYNOPSIS
+
+  video-bookmarks [options] video-file
+
+=head1 DESCRIPTIONS
+
+This script assumes that you are familiar with the proposed video-bookmarks
+notation standard, which enables you to attach timecode offsets and descriptions
+to a video file, in its filename, extended-attributes and other metadata
+facilities. This script here parses these markers and starts a video-player with
+a seek command, based on what the user selected in a list selection GUI widget.
+
+Please read the attached text file for an explanation of the syntax, basic
+assumptions and storage of video-boomarks.
+
+This script is considered a bridging technology that will become obsolete once
+video-players implement the proposed video-bookmarks standard or similar means
+to attach seek hints with video-files.
+
+=head1 OPTIONS
+
+=over
+
+=item B<--player>
+
+Optional. Tell video-bookmarks which video-player should be used for playback.
+Defaults to mplayer. Other values: avplay (working), smplayer (not working).
+
+=item B<--play-sole-one>
+
+Flag. Optional. If there's only one video-bookmark found on a file, this one
+is played back without prompting the user for a selection. The select/or-cancel
+dialog will return after exiting the player the first time.
+
+=item B<--once>
+
+Flag. Optional. Tell video-bookmarks to cycle only once through "select bookmark
+and play video", then exits.
+
+=item B<--set-interactive>
+
+Flag. Optional. Enter an interactive editing mode: the script will prompt you
+to enter a timecode and a description and will then set a video-bookmark on the
+given file.
+
+=item B<--set-from-file>
+
+Optional. The script will read timecodes and descriptions from a text file where
+each line containing a timecode in the form 00:00:00 will be treated as a time
+offset and all text on this line will end up as description. Extracted
+video-bookmarks will then be set on the given file.
+
+=item B<--help, -h>
+
+Flag. Print usage info.
+
+=back
+
+=head1 AUTHOR
+
+Clipland GmbH L<http://www.clipland.com/>
+
+=head1 COPYRIGHT & LICENSE
+
+Copyright 2015 Clipland GmbH. All rights reserved.
+
+This script is free software, dual-licensed under L<GPLv3|http://www.gnu.org/licenses/gpl>/L<AL2|http://opensource.org/licenses/Artistic-2.0>.
+You can redistribute it and/or modify it under the same terms as Perl itself.
