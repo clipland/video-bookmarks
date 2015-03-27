@@ -87,7 +87,7 @@ Timecode is not frame-rate dependent, nor does the last string element refer to
 a specific frame. All numbers refer to absolute runtime at intended playback
 speed.
 
-### Textual Syntax in filenames
+### Textual syntax in filenames
 
 The textual syntax for bookmarks in video files is mainly targeted at use in a
 file's name, its basename. It looks similar to links in the Markdown markup

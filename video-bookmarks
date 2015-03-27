@@ -207,17 +207,18 @@ video-bookmarks - Wrapper script which passes seek offsets to video-players
 =head1 DESCRIPTIONS
 
 This script assumes that you are familiar with the proposed video-bookmarks
-notation standard, which enables you to attach timecode offsets and descriptions
-to a video file, in its filename, extended-attributes and other metadata
-facilities. This script here parses these markers and starts a video-player with
-a seek command, based on what the user selected in a list selection GUI widget.
+notation standard, which enables you to attach annotations or descriptions at
+specific timecode offsets to a video file; in its filename, extended-attributes
+and other metadata facilities. This script here parses these markers and starts
+a video-player with a seek command, based on what the user selected in a list
+selection GUI widget.
 
 Please read the attached text file for an explanation of the syntax, basic
-assumptions and storage of video-boomarks.
+assumptions and storage of video-bookmarks.
 
 This script is considered a bridging technology that will become obsolete once
 video-players implement the proposed video-bookmarks standard or similar means
-to attach seek hints with video-files.
+to attach seek hints to video-files.
 
 =head1 OPTIONS
 
@@ -257,6 +258,11 @@ video-bookmarks will then be set on the given file.
 Flag. Print usage info.
 
 =back
+
+=head1 DEPENDENCIES
+
+This script relies on L<Zenity|https://en.wikipedia.org/wiki/Zenity> for GUI
+dialogs and plays files with media players typically found on *nix.
 
 =head1 AUTHOR
 
