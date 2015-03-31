@@ -10,11 +10,12 @@ use JSON::XS;
 use Path::Tiny;
 use Pod::Usage;
 
-our $VERSION = 0.01_01;
+our $VERSION = 0.01_02;
 
 GetOptions(
 	"set-interactive"	=> \my $set_interactive,
 	"set-from-file:s"	=> \my $set_from_file,
+	"edit"		=> \my $edit,
 	"player:s"	=> \my $player,
 	"play-sole-one"	=> \my $play_sole_one,
 	"once"		=> \my $once,
@@ -68,6 +69,47 @@ if($set_interactive || $set_from_file){
 		print 'create:'. Data::Dumper::Dumper($ref) ."\njson:".$json if $debug;
 		setfattr($path, 'video.bookmarks', $json);
 	}
+}elsif($edit){
+	my @lines;
+
+	# read current video bookmarks
+	my $flag = getfattr($path, 'video.bookmarks');
+	if($flag && $flag =~ /^\[\[/){	# is JSON
+		my $ref = JSON::XS::decode_json($flag);
+		print 'existing:'. Data::Dumper::Dumper($ref) if $debug;
+
+		# prepare temp file lines
+		for(sort { $a->[0] cmp $b->[0] } @$ref){
+			push(@lines, $_->[0] .' '. encode('utf-8',$_->[1]) ."\n");
+		}
+	}
+
+	# write lines or empty array to temp file
+	my $temp_file = path('/tmp','video-bookmarks-'.time());
+	$temp_file->spew_raw(@lines);
+
+	# open editor
+	system('nano', '--tempfile', $temp_file->canonpath); # --tempfile (don't ask user to save on exit)
+
+	# read back in and check if user has changed something
+	my $text = $temp_file->slurp_raw;
+	if(join('',@lines) eq $text){
+		print "unchanged. exiting.\n" if $debug;
+		exit;
+	}
+
+	# parse and delete..
+	my @replace = parse_text( \$text, $debug );
+	if(!@replace){
+		delfattr($path, 'video.bookmarks') if $flag;
+		print "remove video bookmark(s), if any. exiting.\n" if $debug;
+		exit;
+	}
+
+	# ..or replace bookmark(s)
+	my $json = JSON::XS::encode_json(\@replace);
+	print 'edit-replace:'. Data::Dumper::Dumper(\@replace) ."\njson:".$json if $debug;
+	setfattr($path, 'video.bookmarks', $json);
 }else{
 	for(;;){
 		## from basename
@@ -194,6 +236,12 @@ sub setfattr {
 	File::ExtAttr::setfattr($path, $key, $value, { namespace => 'user' });
 }
 
+sub delfattr {
+	my ($path, $key) = @_;
+
+	File::ExtAttr::delfattr($path, $key, { namespace => 'user' });
+}
+
 __END__
 
 =head1 NAME
@@ -244,7 +292,8 @@ and play video", then exits.
 
 Flag. Optional. Enter an interactive editing mode: the script will prompt you
 to enter a timecode and a description and will then set a video-bookmark on the
-given file.
+given file. One bookmark at a time. If you want to set more than one video
+bookmark as a batch, use --edit.
 
 =item B<--set-from-file>
 
@@ -252,6 +301,15 @@ Optional. The script will read timecodes and descriptions from a text file where
 each line containing a timecode in the form 00:00:00 will be treated as a time
 offset and all text on this line will end up as description. Extracted
 video-bookmarks will then be set on the given file.
+
+=item B<--edit>
+
+Flag. Optional. Works for bookmarks from/in xattr only. Edits are done in shell
+mode, non GUI. The script will dump currently set bookmarks from extended
+attributes into a temporary text file (or create an empty file) and then opens
+nano for the user to set, edit and/or delete bookmarks. After exiting the
+editor, the script will parse the edited text blob and set video bookmarks
+accordingly.
 
 =item B<--help, -h>
 
