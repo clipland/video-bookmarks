@@ -196,7 +196,7 @@ has been funded by Clipland GmbH, [clipland.com](http://www.clipland.com/)
 
 ## Copyright and License
 
-This standards proposal is Copyright 2015 Clipland GmbH. All rights reserved.
+This standards proposal is Copyright 2015-2017 Clipland GmbH. All rights reserved.
 
 Clipland GmbH licenses this standard and its documentation to the public under
 the GNU Free Documentation License (GNU FDL or GFDL) Version 1.3.
