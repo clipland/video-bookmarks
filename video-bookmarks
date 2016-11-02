@@ -10,7 +10,7 @@ use JSON::XS;
 use Path::Tiny;
 use Pod::Usage;
 
-our $VERSION = 0.01_02;
+our $VERSION = 0.01;
 
 GetOptions(
 	"set-interactive"	=> \my $set_interactive,
@@ -246,7 +246,7 @@ __END__
 
 =head1 NAME
 
-video-bookmarks - Wrapper script which passes seek offsets to video-players
+video-bookmarks - Wrapper script for passing seek offsets to video-players
 
 =head1 SYNOPSIS
 
@@ -254,19 +254,24 @@ video-bookmarks - Wrapper script which passes seek offsets to video-players
 
 =head1 DESCRIPTIONS
 
-This script assumes that you are familiar with the proposed video-bookmarks
-notation standard, which enables you to attach annotations or descriptions at
-specific timecode offsets to a video file; in its filename, extended-attributes
-and other metadata facilities. This script here parses these markers and starts
-a video-player with a seek command, based on what the user selected in a list
-selection GUI widget.
+This script assumes that you are familiar with the proposed "video-bookmarks
+notation standard", which enables you to attach annotations or descriptions at
+specific timecode offsets to a video file; in its filename, stored in extended
+file attributes or in generic metadata facilities. This script assumes you want
+to start playback at these markers, thus parses attached timecode offsets and
+presents a list selection GUI widget (via I<zenity>) to the user. Upon click,
+it starts a video-player with an adequate seek command.
 
-Please read the attached text file for an explanation of the syntax, basic
+The script is best used via a file-manager like I<Nautilus>, where you can define
+user actions to be fired on right-click. This way you can trigger the I<video-bookmarks>
+script on any media file as a wrapper, prior to playback for example.
+
+Please read the attached README file for an explanation of the syntax, basic
 assumptions and storage of video-bookmarks.
 
-This script is considered a bridging technology that will become obsolete once
-video-players implement the proposed video-bookmarks standard or similar means
-to attach seek hints to video-files.
+This script is considered a demo or even a bridging script that will become
+obsolete (fingers crossed) once video-players adopt the proposed video-bookmarks
+standard or similar means to attach seek hints to video-files.
 
 =head1 OPTIONS
 

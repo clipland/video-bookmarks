@@ -3,14 +3,12 @@ Video-Bookmarks
 
 Proposed player independent standard for attaching textual metadata to certain
 timecode positions within a video file, as markers, as annotations or as video
-bookmarks.
-
-_Revision 1_
+bookmarks. Version 1.
 
 ## DESCRIPTION
 
-Some players or video editing software implement the notion of having a marker
-at various time offsets of a video file.
+Some video-players or video editing software implement the notion of having a
+marker at various time offsets of a video file.
 
 A marker specifies a singular timecode position within a video-file. Mostly
 a marker is indicator of the beginning of a section within a presentation, so
@@ -23,7 +21,7 @@ contexts than playback and for different purposes. As the overall idea can also
 be applied to audio files, we might just as well speak of audio, or more
 general, media bookmarks.
 
-This document defines a syntax for describing these video bookmarks and gives
+This document defines a syntax for describing these video bookmarks and offers
 recommendations for storage of video bookmarks along with and embedded in files.
 
 ## SYNTAX & DATA STRUCTURES
@@ -56,7 +54,9 @@ ascending timecode.
 Storage layers are the filename (the file's basename), filesystem extended
 attributes (xattr) and the video container's metadata key/value store (if
 available). Bookmarks may be stored in all three stores, with deduplication done
-by implementing applications.
+by implementing applications. If video bookmarks are saved in a file's name and
+the host filesystem doesn't allow the colon (":") character in filenames, the
+colon may be exchanged with the dot (".").
 
 We store these values into a metadata attribute with the name (key)
 _video.bookmarks_ as a JSON encoded array of arrays. Or into _video.bookmarks_
