@@ -10,7 +10,7 @@ use JSON::XS;
 use Path::Tiny;
 use Pod::Usage;
 
-our $VERSION = 0.01;
+our $VERSION = 0.02;
 
 GetOptions(
 	"set-interactive"	=> \my $set_interactive,
@@ -19,6 +19,7 @@ GetOptions(
 	"player:s"	=> \my $player,
 	"play-sole-one"	=> \my $play_sole_one,
 	"once"		=> \my $once,
+	"remove"	=> \my $remove,
 	"debug"		=> \my $debug,
 	'help|h'	=> \my $help,
 ) or pod2usage(2);
@@ -69,6 +70,13 @@ if($set_interactive || $set_from_file){
 		print 'create:'. Data::Dumper::Dumper($ref) ."\njson:".$json if $debug;
 		setfattr($path, 'video.bookmarks', $json);
 	}
+}elsif($remove){
+	my $exists = getfattr($path, 'video.bookmarks');
+
+	if($exists){
+		print "remove: removing video.bookmarks xattr tag \n" if $debug;
+		delfattr($path, 'video.bookmarks');
+	}
 }elsif($edit){
 	my @lines;
 
@@ -79,7 +87,7 @@ if($set_interactive || $set_from_file){
 		print 'existing:'. Data::Dumper::Dumper($ref) if $debug;
 
 		# prepare temp file lines
-		for(sort { $a->[0] cmp $b->[0] } @$ref){
+		for(sort tcsort @$ref){
 			push(@lines, $_->[0] .' '. encode('utf-8',$_->[1]) ."\n");
 		}
 	}
@@ -128,7 +136,7 @@ if($set_interactive || $set_from_file){
 		}
 
 		my @list;
-		for(sort { $a->[0] cmp $b->[0] } @xattr_bmarks,@basename_bmarks){
+		for(sort tcsort @xattr_bmarks,@basename_bmarks){
 			print " ". $_->[0] ." ". $_->[1] ."\n" if $debug;
 			$_->[1] =~ s/"/\\"/g;
 			push(@list, $_->[0], '"'.($_->[1]||'-').'"');
@@ -185,6 +193,21 @@ if($set_interactive || $set_from_file){
 	}
 }
 
+# timecode sort, not just alphanumeric, so hh:mm:ss comes after mm:ss
+sub tcsort {
+	if( length $a->[0] == length $b->[0]){
+		$a->[0] cmp $b->[0];
+	}else{
+		if(length $a->[0] < length $b->[0]) {
+			return -1;
+		}elsif(length $a->[0] > length $b->[0]) {
+			return 1;
+		}else {
+			return 0;
+		}
+	}
+}
+
 sub parse_basename {
 	my ($basename,$debug) = @_;
 
@@ -203,7 +226,10 @@ sub parse_text {
 	my %bmarks;
 	for( split(/\n/,$$text_ref) ){
 		chomp($_);
-		(my $timecode) = $_ =~ /(\d{1,2}:\d{1,2}:\d{1,2})/;	# find timecode
+		(my $timecode) = $_ =~ /(\d{1,2}:\d{1,2}:\d{1,2})/;	# find hh:mm:ss timecodes
+		unless($timecode){
+			($timecode) = $_ =~ /(\d{1,2}:\d{1,2})/;	# find mm:ss timecodes
+		}
 		$_ =~ s/$timecode// if $timecode;			# if found, remove tc so everything else is description
 		my $description = $_;
 		$description =~ s/^\s+|\s+$//g;				# remove leading/trailing space

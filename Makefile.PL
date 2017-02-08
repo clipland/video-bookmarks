@@ -7,7 +7,7 @@ rename('README.md','README') if -f 'README.md';
 WriteMakefile(
 	NAME		=> 'App::video-bookmarks',
 	AUTHOR		=> 'Clipland (clipland@cpan.org)',
-	ABSTRACT_FROM	=> 'video-bookmarks',
+	ABSTRACT	=> 'Wrapper script for passing seek offsets to video-players',
 	VERSION_FROM	=> 'video-bookmarks',
 	LICENSE		=> 'gpl', # as close as it gets to GPL3+AL2
 	PREREQ_PM	=> {
